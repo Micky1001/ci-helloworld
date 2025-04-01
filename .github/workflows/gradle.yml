@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [ "master" ]
 
-  # permissions:
-  # contents: read
-
 jobs:
   build_and_test:
     name: Build and Test
@@ -16,28 +13,76 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+
       - name: Set up JDK 11
         uses: actions/setup-java@v3
         with:
           java-version: '11'
           distribution: 'temurin'
+
       - name: Setting Permissions
         run: chmod a+x gradlew
+
       - name: Build with Gradle
         uses: gradle/gradle-build-action@67421db6bd0bf253fb4bd25b31ebb98943c375e1
         with:
           arguments: build
+
       - name: Test with Gradle
         uses: gradle/gradle-build-action@67421db6bd0bf253fb4bd25b31ebb98943c375e1
         with:
           arguments: test
+
       - name: Run Test Coverage
         run: ./gradlew jacocoTestReport
-      - name: Jacoco
+
+      - name: Generate Jacoco Badge
         uses: cicirello/jacoco-badge-generator@v2.9.0
         with:
           jacoco-csv-file: build/reports/jacoco/test/jacocoTestReport.csv
-          fail-if-branches-less-than: 100
+
+      - name: Download previous coverage artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: coverage-baseline
+          path: .
+        continue-on-error: true
+
+      - name: Compare Coverage with Previous Run
+        run: |
+          CURRENT_COVERAGE=$(grep "TOTAL" build/reports/jacoco/test/jacocoTestReport.csv | awk -F',' '{print $2}' | tr -d '%')
+          CURRENT_BRANCH_COVERAGE=$(grep "TOTAL" build/reports/jacoco/test/jacocoTestReport.csv | awk -F',' '{print $3}' | tr -d '%')
+          echo "Current code coverage: $CURRENT_COVERAGE%"
+          echo "Current branch coverage: $CURRENT_BRANCH_COVERAGE%"
+          
+          if [ -f previous_coverage.txt ]; then
+            read PREV_COVERAGE PREV_BRANCH_COVERAGE < previous_coverage.txt
+            echo "Previous code coverage: $PREV_COVERAGE%"
+            echo "Previous branch coverage: $PREV_BRANCH_COVERAGE%"
+          else
+            echo "No previous coverage data found. Setting current coverage as baseline."
+            PREV_COVERAGE=$CURRENT_COVERAGE
+            PREV_BRANCH_COVERAGE=$CURRENT_BRANCH_COVERAGE
+          fi
+
+          if (( $(echo "$CURRENT_COVERAGE < $PREV_COVERAGE" | bc -l) )); then
+            echo "Error: Code coverage dropped from $PREV_COVERAGE% to $CURRENT_COVERAGE%."
+            exit 1
+          fi
+
+          if (( $(echo "$CURRENT_BRANCH_COVERAGE < $PREV_BRANCH_COVERAGE" | bc -l) )); then
+            echo "Error: Branch coverage dropped from $PREV_BRANCH_COVERAGE% to $CURRENT_BRANCH_COVERAGE%."
+            exit 1
+          fi
+
+          echo "$CURRENT_COVERAGE $CURRENT_BRANCH_COVERAGE" > previous_coverage.txt
+        shell: bash
+
+      - name: Upload Coverage Baseline
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-baseline
+          path: previous_coverage.txt
 
   build_and_publish_docker_image:
     name: Publish to Docker Hub
