@@ -49,12 +49,12 @@ jobs:
           total_instr_covered=0
           total_branch_missed=0
           total_branch_covered=0
-          tail -n +2 "$REPORT" | while IFS=',' read -r _ _ _ instr_missed instr_covered branch_missed branch_covered _; do
+          while IFS=',' read -r _ _ _ instr_missed instr_covered branch_missed branch_covered _; do
             total_instr_missed=$((total_instr_missed + instr_missed))
             total_instr_covered=$((total_instr_covered + instr_covered))
             total_branch_missed=$((total_branch_missed + branch_missed))
             total_branch_covered=$((total_branch_covered + branch_covered))
-          done
+          done < <(tail -n +2 "$REPORT")
           if [ $((total_instr_missed + total_instr_covered)) -eq 0 ]; then
             current_instr_percent=0
           else
