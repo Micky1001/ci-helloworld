@@ -28,7 +28,10 @@ jar {
 jacocoTestReport {
     dependsOn test
     reports {
-        csv.required = true
+        xml.required.set(false)
+        html.required.set(false)
+        csv.required.set(true)
+        csv.outputLocation.set(file("$buildDir/reports/jacoco/test/jacocoTestReport.csv"))
     }
 }
 
